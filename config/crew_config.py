@@ -11,14 +11,11 @@ def get_groq_llm():
         st.error("Groq API Key missing! Please add GROQ_API_KEY to Streamlit Secrets.")
         st.stop()
     
-    # Set environment variable for LiteLLM/CrewAI
-    os.environ["GROQ_API_KEY"] = api_key
-    
-    # Initialize CrewAI LLM pointing to the Developer Plan endpoint
-    # You can switch to "groq/openai/gpt-oss-120b" if needed
+    # Configure via Groq's official OpenAI-compatible endpoint
     return LLM(
-        model="groq/openai/gpt-oss-20b",
+        model="openai/gpt-oss-20b",
         api_key=api_key,
+        base_url="https://api.groq.com/openai/v1",
         temperature=0.2
     )
 
