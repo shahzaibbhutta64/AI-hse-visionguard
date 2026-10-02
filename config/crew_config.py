@@ -14,10 +14,12 @@ def get_groq_llm():
     # Set environment variable for LiteLLM/CrewAI
     os.environ["GROQ_API_KEY"] = api_key
     
-    # Initialize CrewAI LLM pointing to Groq provider
+    # Initialize CrewAI LLM pointing to the Developer Plan endpoint
+    # You can switch to "groq/openai/gpt-oss-120b" if needed
     return LLM(
         model="groq/openai/gpt-oss-20b",
-        api_key=api_key
+        api_key=api_key,
+        temperature=0.2
     )
 
 def run_hse_crew(event_data):
