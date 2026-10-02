@@ -8,9 +8,13 @@ from agents.security_alert import create_security_alert_agent, create_alert_task
 def get_groq_llm():
     api_key = st.secrets.get("GROQ_API_KEY") or os.environ.get("GROQ_API_KEY")
     if not api_key:
-        st.error("Groq API Key missing! Add GROQ_API_KEY to Streamlit secrets.")
+        st.error("Groq API Key missing! Please add GROQ_API_KEY to Streamlit Secrets.")
         st.stop()
     
+    # Set environment variable for LiteLLM/CrewAI
+    os.environ["GROQ_API_KEY"] = api_key
+    
+    # Initialize CrewAI LLM pointing to Groq provider
     return LLM(
         model="groq/openai/gpt-oss-20b",
         api_key=api_key
@@ -39,9 +43,8 @@ def run_hse_crew(event_data):
     )
     
     result = crew.kickoff()
-    
-    # Extract structured fields fallback logic
     raw_output = str(result)
+    
     severity = "High" if "High" in raw_output else ("Medium" if "Medium" in raw_output else "Low")
     
     return {
