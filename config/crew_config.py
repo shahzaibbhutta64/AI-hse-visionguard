@@ -1,7 +1,56 @@
 import os
+import functools
 
 # Turn off CrewAI telemetry (avoids slow start-up / network noise on Streamlit Cloud)
 os.environ["OTEL_SDK_DISABLED"] = "true"
+
+# ---------------------------------------------------------------------------
+# GROQ COMPATIBILITY PATCH
+# Some CrewAI versions add a hidden field called "cache_breakpoint" to every
+# message. Groq does not know this field and rejects the request.
+# This patch removes the field just before the request is sent to Groq.
+# It must run BEFORE crewai is imported, so it lives at the top of the file.
+# ---------------------------------------------------------------------------
+_BAD_KEY = "cache_breakpoint"
+
+
+def _strip_bad_key(messages):
+    """Returns a copy of the message list without the unsupported field."""
+    if not isinstance(messages, list):
+        return messages
+    cleaned = []
+    for m in messages:
+        if isinstance(m, dict) and _BAD_KEY in m:
+            m = {k: v for k, v in m.items() if k != _BAD_KEY}
+        cleaned.append(m)
+    return cleaned
+
+
+def _wrap_litellm_function(fn):
+    if getattr(fn, "_hse_patched", False):
+        return fn  # already patched (Streamlit re-runs the script often)
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        if "messages" in kwargs:
+            kwargs["messages"] = _strip_bad_key(kwargs["messages"])
+        elif len(args) > 1:
+            args = (args[0], _strip_bad_key(args[1])) + tuple(args[2:])
+        return fn(*args, **kwargs)
+
+    wrapper._hse_patched = True
+    return wrapper
+
+
+try:
+    import litellm
+
+    litellm.completion = _wrap_litellm_function(litellm.completion)
+    if hasattr(litellm, "acompletion"):
+        litellm.acompletion = _wrap_litellm_function(litellm.acompletion)
+except Exception:
+    pass  # if litellm is missing, the normal error message will explain it
+# ---------------------------------------------------------------------------
 
 import streamlit as st
 from crewai import Crew, Process, LLM
