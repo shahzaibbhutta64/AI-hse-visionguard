@@ -1,7 +1,6 @@
 import os
 import streamlit as st
-from crewai import Crew, Process
-from langchain_groq import ChatGroq
+from crewai import Crew, Process, LLM
 from agents.hse_analyst import create_hse_analyst, create_hse_analysis_task
 from agents.risk_action import create_risk_action_agent, create_risk_task
 from agents.security_alert import create_security_alert_agent, create_alert_task
@@ -11,11 +10,14 @@ def get_groq_llm():
     if not api_key:
         st.error("Groq API Key missing! Please add GROQ_API_KEY to Streamlit Secrets.")
         st.stop()
-        
-    # Directly initialize ChatGroq using developer plan model
-    return ChatGroq(
+    
+    # Set environment variables expected by LiteLLM / CrewAI
+    os.environ["GROQ_API_KEY"] = api_key
+    
+    # Return native CrewAI LLM instance targeting the free developer plan model
+    return LLM(
+        model="groq/openai/gpt-oss-20b",
         api_key=api_key,
-        model_name="openai/gpt-oss-20b",
         temperature=0.2
     )
 
