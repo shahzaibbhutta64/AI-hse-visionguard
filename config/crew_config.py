@@ -1,4 +1,5 @@
 import os
+import time
 import functools
 
 # Turn off CrewAI telemetry (avoids slow start-up / network noise on Streamlit Cloud)
@@ -82,10 +83,24 @@ def get_groq_llm():
     )
 
 
-def run_hse_crew(event_data):
-    """Executes 3 CrewAI agents in sequence for event analysis."""
-    llm = get_groq_llm()
+def _is_temporary_error(error):
+    """True for network / access / timeout problems that are worth retrying."""
+    msg = str(error)
+    markers = (
+        "Access denied",
+        "network settings",
+        "APIError",
+        "Connection",
+        "Timeout",
+        "timed out",
+        "RateLimit",
+        "ServiceUnavailable",
+    )
+    return any(m in msg for m in markers)
 
+
+def _run_crew_once(llm, event_data):
+    """Builds the 3 agents + 3 tasks and runs the crew one time."""
     # 1. Create the agents
     analyst = create_hse_analyst(llm)
     risk_agent = create_risk_action_agent(llm)
@@ -108,8 +123,29 @@ def run_hse_crew(event_data):
         process=Process.sequential,
         verbose=False,
     )
+    return crew.kickoff()
 
-    result = crew.kickoff()
+
+def run_hse_crew(event_data):
+    """Executes 3 CrewAI agents in sequence (same Groq key + same model, with auto-retry)."""
+    llm = get_groq_llm()
+
+    MAX_TRIES = 5          # total number of attempts
+    WAIT_STEP = 5          # waits 5s, 10s, 15s, 20s between attempts
+    last_error = None
+    result = None
+
+    for attempt in range(1, MAX_TRIES + 1):
+        try:
+            result = _run_crew_once(llm, event_data)
+            break  # success -> stop retrying
+        except Exception as e:
+            last_error = e
+            if _is_temporary_error(e) and attempt < MAX_TRIES:
+                time.sleep(WAIT_STEP * attempt)
+                continue
+            raise  # different kind of error, or out of tries
+
     raw_output = str(result)
 
     if "High" in raw_output:
